@@ -1,0 +1,17 @@
+{
+  "display_name": "aenat",
+  "min_instances": 1,
+  "max_instances": 1,
+  "psc_interface_config": {
+    "network_attachment": "projects/as-alf-argolis/regions/us-east1/networkAttachments/agent-engine-network-attachment",
+    "dns_peering_configs": [
+      {
+        "domain": "googleapis.com.",
+        "target_project": "as-alf-argolis",
+        "target_network": "attachment-vpc"
+      }
+    ]
+  }
+}
+
+
