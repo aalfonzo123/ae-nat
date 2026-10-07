@@ -211,3 +211,45 @@ resource "google_compute_router_nat" "attachment_nat" {
   nat_ips                            = [google_compute_address.attachment-nat-ip.self_link]
   source_subnetwork_ip_ranges_to_nat = "ALL_SUBNETWORKS_ALL_IP_RANGES"
 }
+
+# Proxy VM for outbound internet access
+resource "google_compute_instance" "proxy_vm" {
+  name         = "proxy-vm"
+  machine_type = "e2-micro"
+  zone         = var.zone
+
+  boot_disk {
+    initialize_params {
+      image = "debian-cloud/debian-12"
+    }
+  }
+
+  network_interface {
+    subnetwork = google_compute_subnetwork.attachment-subnet.id
+  }
+
+  shielded_instance_config {
+    enable_secure_boot = true
+  }
+
+  metadata = {
+    startup-script = <<-EOF
+      #!/bin/bash
+      sudo apt-get update
+      sudo apt-get install -y tcpdump tinyproxy apache2
+      sudo service apache2 restart
+      echo 'proxy server !!' | sudo tee /var/www/html/index.html
+
+      # Configure tinyproxy to allow connections from internal subnets
+      sudo sed -i 's/^Allow /#Allow /' /etc/tinyproxy/tinyproxy.conf
+      echo "Allow 0.0.0.0/0" | sudo tee -a /etc/tinyproxy/tinyproxy.conf
+      sudo systemctl restart tinyproxy
+    EOF
+  }
+}
+
+output "proxy_vm_internal_ip" {
+  description = "Internal IP address of the proxy VM"
+  value       = google_compute_instance.proxy_vm.network_interface[0].network_ip
+}
+

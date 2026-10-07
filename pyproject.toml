@@ -4,4 +4,8 @@ version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
 requires-python = "==3.11.15"
-dependencies = ["google-adk>=2.10.0", "google-cloud-aiplatform>=2.3.0"]
+dependencies = [
+    "google-adk>=2.10.0",
+    "google-cloud-aiplatform>=2.3.0",
+    "google-cloud-logging>=3.17.0",
+]
