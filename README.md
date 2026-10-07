@@ -29,35 +29,31 @@ To handle outbound traffic properly from the Agent Engine:
 
 ```mermaid
 graph TD
-    subgraph AgentEngineTenant ["Agent Engine Service Tenant Network"]
-        Agent ["ADK Agent Engine (Reasoning Engine)"]
+    subgraph "Agent Engine Service Tenant Network"
+        Agent["ADK Agent Engine - Reasoning Engine"]
     end
 
-    subgraph CustomerVPC ["Customer VPC (attachment-vpc)"]
-        Subnet ["Attachment Subnet (10.1.0.0/24)"]
-        
-        NA ["Network Attachment (agent-engine-network-attachment)"]
-        
-        PSCEndpoint ["PSC Google APIs Endpoint (10.250.0.1)"]
-        DNS ["Private DNS Zone (googleapis.com -> 10.250.0.1)"]
-        
-        ProxyVM ["Proxy VM (proxy-vm: 10.1.0.4:8888)"]
-        
-        CloudNAT ["Cloud Router & Cloud NAT (attachment-nat)"]
+    subgraph "Customer VPC - attachment-vpc"
+        Subnet["Attachment Subnet 10.1.0.0/24"]
+        NA["Network Attachment agent-engine-network-attachment"]
+        PSCEndpoint["PSC Google APIs Endpoint 10.250.0.1"]
+        DNS["Private DNS Zone googleapis.com -> 10.250.0.1"]
+        ProxyVM["Proxy VM proxy-vm: 10.1.0.4:8888"]
+        CloudNAT["Cloud Router & Cloud NAT attachment-nat"]
     end
 
-    subgraph External ["External Networks & Services"]
-        GoogleAPIs ["Google APIs"]
-        Internet ["Public Internet (e.g. api.ipify.org)"]
+    subgraph "External Networks & Services"
+        GoogleAPIs["Google APIs"]
+        Internet["Public Internet e.g. api.ipify.org"]
     end
 
     Agent -->|"1. Connects via PSC"| NA
     NA -->|"Enters Subnet"| Subnet
 
-    Subnet -->|"2a. Google API Traffic (NO_PROXY)"| PSCEndpoint
+    Subnet -->|"2a. Google API Traffic NO_PROXY"| PSCEndpoint
     PSCEndpoint --> GoogleAPIs
 
-    Subnet -->|"2b. Public Internet Traffic (HTTP_PROXY)"| ProxyVM
+    Subnet -->|"2b. Public Internet Traffic HTTP_PROXY"| ProxyVM
     ProxyVM -->|"3. Outbound Egress"| CloudNAT
     CloudNAT -->|"4. NAT External IP"| Internet
 ```

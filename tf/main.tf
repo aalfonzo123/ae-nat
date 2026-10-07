@@ -19,85 +19,29 @@ data "google_project" "current-project" {
   project_id = var.project_id
 }
 
-# Grant the Vertex AI service agent and Reasoning Engine service agent network permissions
-resource "google_project_iam_member" "aiplatform_network_admin" {
+locals {
+  project_number   = data.google_project.current-project.number
+  aiplatform_sa    = "serviceAccount:service-${local.project_number}@gcp-sa-aiplatform.iam.gserviceaccount.com"
+  aiplatform_re_sa = "serviceAccount:service-${local.project_number}@gcp-sa-aiplatform-re.iam.gserviceaccount.com"
+
+  project_iam_bindings = [
+    { role = "roles/compute.networkAdmin", member = local.aiplatform_sa },
+    { role = "roles/compute.networkAdmin", member = local.aiplatform_re_sa },
+    { role = "roles/compute.networkUser",  member = local.aiplatform_sa },
+    { role = "roles/compute.networkUser",  member = local.aiplatform_re_sa },
+    { role = "roles/dns.peer",             member = local.aiplatform_sa },
+    { role = "roles/dns.peer",             member = local.aiplatform_re_sa },
+  ]
+}
+
+resource "google_project_iam_member" "project_members" {
+  for_each = {
+    for b in local.project_iam_bindings : "${b.role}/${b.member}" => b
+  }
+
   project = var.project_id
-  role    = "roles/compute.networkAdmin"
-  member  = "serviceAccount:service-${data.google_project.current-project.number}@gcp-sa-aiplatform.iam.gserviceaccount.com"
-}
-
-resource "google_project_iam_member" "aiplatform_re_network_admin" {
-  project = var.project_id
-  role    = "roles/compute.networkAdmin"
-  member  = "serviceAccount:service-${data.google_project.current-project.number}@gcp-sa-aiplatform-re.iam.gserviceaccount.com"
-}
-
-resource "google_project_iam_member" "aiplatform_network_user" {
-  project = var.project_id
-  role    = "roles/compute.networkUser"
-  member  = "serviceAccount:service-${data.google_project.current-project.number}@gcp-sa-aiplatform.iam.gserviceaccount.com"
-}
-
-resource "google_project_iam_member" "aiplatform_re_network_user" {
-  project = var.project_id
-  role    = "roles/compute.networkUser"
-  member  = "serviceAccount:service-${data.google_project.current-project.number}@gcp-sa-aiplatform-re.iam.gserviceaccount.com"
-}
-
-# Grant default compute service account necessary runtime roles
-resource "google_project_iam_member" "compute_sa_aiplatform_user" {
-  project = var.project_id
-  role    = "roles/aiplatform.user"
-  member  = "serviceAccount:${data.google_project.current-project.number}-compute@developer.gserviceaccount.com"
-}
-
-resource "google_project_iam_member" "compute_sa_log_writer" {
-  project = var.project_id
-  role    = "roles/logging.logWriter"
-  member  = "serviceAccount:${data.google_project.current-project.number}-compute@developer.gserviceaccount.com"
-}
-
-resource "google_compute_subnetwork_iam_member" "subnet_re_network_user" {
-  project    = var.project_id
-  region     = var.region
-  subnetwork = google_compute_subnetwork.attachment-subnet.name
-  role       = "roles/compute.networkUser"
-  member     = "serviceAccount:service-${data.google_project.current-project.number}@gcp-sa-aiplatform-re.iam.gserviceaccount.com"
-}
-
-resource "google_compute_subnetwork_iam_member" "subnet_aiplatform_network_user" {
-  project    = var.project_id
-  region     = var.region
-  subnetwork = google_compute_subnetwork.attachment-subnet.name
-  role       = "roles/compute.networkUser"
-  member     = "serviceAccount:service-${data.google_project.current-project.number}@gcp-sa-aiplatform.iam.gserviceaccount.com"
-}
-
-resource "google_compute_subnetwork_iam_member" "subnet_servicenetworking_network_user" {
-  project    = var.project_id
-  region     = var.region
-  subnetwork = google_compute_subnetwork.attachment-subnet.name
-  role       = "roles/compute.networkUser"
-  member     = "serviceAccount:service-${data.google_project.current-project.number}@service-networking.iam.gserviceaccount.com"
-}
-
-resource "google_project_iam_member" "servicenetworking_network_user" {
-  project = var.project_id
-  role    = "roles/compute.networkUser"
-  member  = "serviceAccount:service-${data.google_project.current-project.number}@service-networking.iam.gserviceaccount.com"
-}
-
-# Grant DNS Peer role to Vertex AI & Reasoning Engine service agents for Private DNS resolution
-resource "google_project_iam_member" "aiplatform_dns_peer" {
-  project = var.project_id
-  role    = "roles/dns.peer"
-  member  = "serviceAccount:service-${data.google_project.current-project.number}@gcp-sa-aiplatform.iam.gserviceaccount.com"
-}
-
-resource "google_project_iam_member" "aiplatform_re_dns_peer" {
-  project = var.project_id
-  role    = "roles/dns.peer"
-  member  = "serviceAccount:service-${data.google_project.current-project.number}@gcp-sa-aiplatform-re.iam.gserviceaccount.com"
+  role    = each.value.role
+  member  = each.value.member
 }
 
 # create vpc, subnet, network attachment
@@ -106,27 +50,20 @@ resource "google_compute_network" "attachment-vpc" {
   auto_create_subnetworks = false
 }
 
-resource "google_compute_firewall" "allow_internal_and_health_checks" {
-  name    = "attachment-vpc-allow-ingress"
+resource "google_compute_firewall" "allow_internal_proxy_ingress" {
+  name    = "attachment-vpc-allow-internal"
   network = google_compute_network.attachment-vpc.name
 
   allow {
-    protocol = "all"
+    protocol = "tcp"
+    ports    = ["8888", "80"]
   }
-
-  source_ranges = ["0.0.0.0/0"]
-}
-
-resource "google_compute_firewall" "allow_egress" {
-  name      = "attachment-vpc-allow-egress"
-  network   = google_compute_network.attachment-vpc.name
-  direction = "EGRESS"
 
   allow {
-    protocol = "all"
+    protocol = "icmp"
   }
 
-  destination_ranges = ["0.0.0.0/0"]
+  source_ranges = [var.attachment_subnet_cidr]
 }
 
 resource "google_compute_subnetwork" "attachment-subnet" {
